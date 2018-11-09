@@ -1,0 +1,6 @@
+secret_key = 'B2C87BB9B0C1BC524C8708AC713E185CD10B8CD6F7452A7549DB39C6AB9FFBF0'
+UPLOAD_TABLE_NAME = 'data'
+TEAM_TABLE_NAME = 'team'
+UPLOAD_DIR = '/tmp/backend-scops/uploads'
+CHUNK_DIR = '/tmp/backend-scops/chunks'
+EXPORT_DIR = '/tmp/exports-scops'

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Export Data</title>
+    <link rel="shortcut icon" type="image/png" href="../static/image/favicon.ico">
+    <link rel="stylesheet" type="text/css" href="../static/css/common.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+      <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+      <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 15px;
+        }
+    </style>
+</head>
+<body>
+<div class="main-border">
+    <div class="sub-c-border" >
+        <p>Select data source to export</p>
+        <select id="table-name">
+          <option value="data">CSV data</option>
+        </select>
+    </div>
+    <div class="sub-c-border" >
+        <p>Select Date type</p>
+        <select id="date-type" onchange="generateOption(this.value)">
+          <option value="sdate" >Single Date</option>
+          <option value="ddate" >Date Range</option>
+        </select>
+    </div>
+    <div class="sub-c-border" id="date-div">
+        <p>Select Order purchase date</p>
+        <input type="date" name="bday" id="sd">
+    </div>
+    <div >
+    <button class="button-center" onclick="submitExport()">Export</button>
+    </div>
+</div>
+<div style="padding: 50px;">
+    <table id="task-queue-list">
+        <tr>
+            <th>Task Id</th>
+            <th>Export Details</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
+    </table>
+</div>
+    <script>
+        function generateOption(optionVal) {
+            var elem = document.getElementById('date-div');
+            if(optionVal === 'sdate') {
+                elem.innerHTML = '<p>Select Order purchase date</p>';
+                elem.innerHTML += '<input type="date" name="bday" id="sd">';
+                elem.style.visibility = 'visible';
+            }else if(optionVal === 'ddate'){
+                elem.innerHTML = '<p>Select Order purchase date(In asc order)</p>';
+                elem.innerHTML += '<input type="date" name="bday" id="dd1">';
+                elem.innerHTML += '<input type="date" name="bday" id="dd2">';
+                elem.style.visibility = 'visible';
+            }
+        }
+        function handleTask(taskId) {
+            const statusEndpoint = '/api/task/result/';
+            const hostname = 'http://' + window.location.host;
+            getRequest(hostname + statusEndpoint + taskId);
+
+        }
+        function submitExport() {
+            const hostname = 'http://' + window.location.host;
+            const uploadEndpointPath = '/api/export';
+            const teamEndpointPath = '/api/team';
+            if(checkErrors()) {
+                let rtype = document.getElementById('table-name');
+                let val = rtype[rtype.selectedIndex].text;
+                let dates = getDates();
+                let req = {};
+                let res;
+                if (val === 'CSV data') {
+                    req.type = 'upload_csv';
+                    req.date = dates;
+                    console.log(req);
+                    postRequest(req, hostname + uploadEndpointPath);
+                } else if (val === 'Teams') {
+                    req.type = 'team_csv';
+                    req.date = dates;
+                    console.log(req);
+                }
+            }else{
+                window.alert('Please select the date/s');
+            }
+        }
+        function getRequest(requestUrl) {
+            let http = new XMLHttpRequest();
+            http.open('GET', requestUrl, false);
+            http.setRequestHeader('Content-type', 'application/json; charset=utf-8');
+
+            http.onreadystatechange = function () {
+                if(http.readyState === 4 && http.status === 200){
+                    console.log(http.responseText);
+                    let response = JSON.parse(http.responseText);
+                    // update UI
+                    let elemButton = document.getElementById('button-'+response['task_id']);
+                    let elemStatus = document.getElementById('status-'+response['task_id']);
+                    if(response['current_status'] === 'SUCCESS'){
+                        elemStatus.innerText = 'SUCCESS';
+                        elemButton.innerText = 'Export';
+                        elemButton.setAttribute('onclick', 'download(\'' + response['task_id'] + '\')');
+                    }else{
+                        elemStatus.innerText = response['current_status'];
+                        if(response['current_status'] === 'REVOKED'){
+                            // now we can remove this task from front-end as well
+                        }else {
+                            setTimeout(function f() {
+                                getRequest(requestUrl);
+                            }, 3000); // timeout should be decided by backend on the basis of some algorithm
+                        }
+                    }
+                }else{
+                    window.alert('Something went wrong, Reload please :)');
+                }
+            };
+            http.send();
+        }
+        function postRequest(requestData, requestUrl) {
+            let http = new XMLHttpRequest();
+            http.open('POST', requestUrl, false);
+            http.setRequestHeader('Content-type', 'application/json; charset=utf-8');
+
+            http.onreadystatechange = function () {
+                if(http.readyState === 4 && http.status === 200){
+                    console.log(http.responseText);
+                    let response = JSON.parse(http.responseText);
+                    if (response){
+                        let elem = document.getElementById('task-queue-list');
+                        let addHtml = '';
+                        addHtml += '<tr id="' + response['task_id'] + '"> ';
+                        addHtml += '<td>' + response['task_id'] + '</td>';
+                        if(requestData.date.sd === undefined){
+                            let dText = requestData.date.dd1 + " : " + requestData.date.dd2;
+                            console.log(dText);
+                            addHtml += '<td>' + dText + '</td>';
+                        }else{
+                            addHtml += '<td>' + requestData.date.sd + '</td>';
+                        }
+                        addHtml += '<td><div class="progress" style="width:200px;">\n' +
+                            '  <div class="progress-bar progress-bar-striped active" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 200px">\n' +
+                            '    <span id="status-' + response['task_id'] + '">'+ response['current_status'] + '<span class="dotdotdot"></span></span>\n' +
+                            '  </div>\n' +
+                            '</div></td>';
+                        addHtml +='<td>';
+                        if(response['current_status'] === 'SUCCESS'){
+                            addHtml += '<button id="button-' + response['task_id'] + '" onclick="download(\'' + response['task_id'] + '\')">' + "Export</button>";
+                        }else{
+                            addHtml += '<button id="button-' + response['task_id'] + '" onclick="cancel(\'' + response['task_id'] + '\')">' + "Cancel</button>";
+                        }
+                        addHtml += '</td>';
+                        addHtml += '</tr>';
+                        elem.innerHTML += addHtml;
+                        handleTask(response['task_id']);
+                    }else{
+                        window.alert('Something went wrong, please try again :)');
+                    }
+                }else{
+                    window.alert('Request can\'t processed');
+                }
+            };
+            http.send(JSON.stringify(requestData));
+        }
+        function cancel(taskId) {
+            const hostname = 'http://' + window.location.host;
+            const cancelEndpointPath = '/api/task/revoke/'+ taskId;
+            getReqForgetResponse(hostname + cancelEndpointPath);
+        }
+        function download(taskId) {
+            window.location.href = 'http://' + window.location.host + '/api/task/download/' + taskId;
+        }
+        function getReqForgetResponse(requestUrl) {
+            let http = new XMLHttpRequest();
+            http.open('GET', requestUrl, false);
+            http.setRequestHeader('Content-type', 'application/json; charset=utf-8');
+            http.onreadystatechange = function () {
+                if(http.readyState === 4 && http.status === 200){
+                    console.log(http.responseText);
+                }
+            };
+            http.send();
+        }
+        function checkErrors() {
+            var tmp = document.getElementById('date-type');
+            if( tmp[tmp.selectedIndex].text === 'Single Date'){
+                tmp = document.getElementById('sd');
+                return tmp.value !== '';
+            }else if(tmp[tmp.selectedIndex].text === 'Date Range'){
+                tmp = document.getElementById('dd1');
+                if(tmp.value === ''){
+                    return false;
+                }else{
+                    tmp = document.getElementById('dd2');
+                    return tmp.value !== '';
+                }
+            }
+        }
+        function getDates() {
+            let resp = {};
+            var tmp = document.getElementById('date-type');
+            if( tmp[tmp.selectedIndex].text === 'Single Date'){
+                tmp = document.getElementById('sd');
+                resp['sd'] = tmp.value;
+            }else if(tmp[tmp.selectedIndex].text === 'Date Range'){
+                tmp = document.getElementById('dd1');
+                resp['dd1'] = tmp.value;
+                tmp = document.getElementById('dd2');
+                resp['dd2'] = tmp.value;
+            }
+            return resp;
+        }
+    </script>
+
+</body>
+</html>
